@@ -1,0 +1,363 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Музыкальный синтезатор с общей панорамой</title>
+    <style>
+        :root {
+            --button-size: min(20vw, 120px);
+            --gap-size: min(2vw, 15px);
+        }
+        
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: Arial, sans-serif;
+            background: linear-gradient(135deg, #1a1a2e, #16213e);
+            color: white;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 20px;
+        }
+        
+        h1 {
+            margin: 20px 0;
+            text-align: center;
+            font-size: clamp(1.5rem, 4vw, 2.5rem);
+            color: #e94560;
+            text-shadow: 0 0 10px rgba(233, 69, 96, 0.5);
+        }
+        
+        .container {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: var(--gap-size);
+            width: 100%;
+            max-width: 600px;
+            margin: 0 auto;
+            padding: 10px;
+        }
+        
+        .button {
+            width: var(--button-size);
+            height: var(--button-size);
+            background: linear-gradient(145deg, #0f3460, #1a1a2e);
+            border: none;
+            border-radius: 15px;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
+            cursor: pointer;
+            transition: all 0.2s ease;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            color: white;
+            font-size: 1.5rem;
+            font-weight: bold;
+            user-select: none;
+            margin: 0 auto;
+        }
+        
+        .button:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 8px 20px rgba(0, 0, 0, 0.4);
+            background: linear-gradient(145deg, #e94560, #0f3460);
+        }
+        
+        .button:active {
+            transform: translateY(1px);
+            box-shadow: 0 3px 10px rgba(0, 0, 0, 0.3);
+        }
+        
+        .button.active {
+            background: #e94560;
+            box-shadow: 0 0 20px rgba(233, 69, 96, 0.7);
+        }
+        
+        .controls {
+            margin-top: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+            align-items: center;
+            width: 100%;
+            max-width: 400px;
+        }
+        
+        .control-group {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            width: 100%;
+        }
+        
+        .control-label {
+            margin-bottom: 5px;
+            font-size: 0.9rem;
+        }
+        
+        .control-slider {
+            width: 100%;
+            max-width: 300px;
+        }
+        
+        .control-btn {
+            padding: 10px 20px;
+            background: #0f3460;
+            border: none;
+            border-radius: 50px;
+            color: white;
+            cursor: pointer;
+            transition: all 0.2s;
+            font-size: 1rem;
+            margin: 5px;
+        }
+        
+        .control-btn:hover {
+            background: #e94560;
+            transform: translateY(-2px);
+        }
+        
+        .btn-group {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            gap: 10px;
+        }
+        
+        footer {
+            margin-top: 30px;
+            text-align: center;
+            font-size: 0.9rem;
+            color: #7a7a8c;
+        }
+        
+        @media (max-width: 500px) {
+            .container {
+                grid-template-columns: repeat(2, 1fr);
+            }
+            
+            .button {
+                width: min(40vw, 150px);
+                height: min(40vw, 150px);
+            }
+        }
+    </style>
+</head>
+<body>
+    <h1>Музыкальный синтезатор</h1>
+    
+    <div class="container" id="buttons-container">
+        <!-- Кнопки будут созданы через JavaScript -->
+    </div>
+    
+    <div class="controls">
+        <div class="control-group">
+            <div class="control-label">Громкость: <span id="volume-value">50%</span></div>
+            <input type="range" min="0" max="1" step="0.1" value="0.5" class="control-slider" id="master-volume">
+        </div>
+        
+        <div class="control-group">
+            <div class="control-label">Панорама: <span id="pan-value">Центр</span></div>
+            <input type="range" min="-1" max="1" step="0.1" value="0" class="control-slider" id="master-pan">
+        </div>
+        
+        <div class="btn-group">
+            <button class="control-btn" id="change-sound">Сменить звук</button>
+            <button class="control-btn" id="stop-all">Остановить все</button>
+            <button class="control-btn" id="reset-pan">Центр</button>
+        </div>
+    </div>
+    
+    <footer>
+        Нажимайте на кнопки для воспроизведения звуков
+    </footer>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const container = document.getElementById('buttons-container');
+            let currentSoundBank = 0;
+            let masterVolume = 0.5;
+            let masterPan = 0;
+            const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+            let masterGain, masterPanner;
+            
+            // Инициализация аудио узлов
+            function initAudioNodes() {
+                masterGain = audioContext.createGain();
+                masterPanner = audioContext.createStereoPanner();
+                
+                masterGain.gain.value = masterVolume;
+                masterPanner.pan.value = masterPan;
+                
+                masterGain.connect(masterPanner);
+                masterPanner.connect(audioContext.destination);
+            }
+            
+            initAudioNodes();
+            
+            // Два банка звуков на выбор
+            const soundBanks = [
+                // Банк 1: синтезаторные ноты
+                [
+                    'https://assets.mixkit.co/sfx/preview/mixkit-sci-fi-positive-interface-beep-158.mp3',
+                    'https://assets.mixkit.co/sfx/preview/mixkit-arcade-game-jump-coin-216.mp3',
+                    'https://assets.mixkit.co/sfx/preview/mixkit-unlock-game-notification-253.mp3',
+                    'https://assets.mixkit.co/sfx/preview/mixkit-achievement-bell-600.mp3',
+                    'https://assets.mixkit.co/sfx/preview/mixkit-retro-arcade-casino-notification-211.mp3',
+                    'https://assets.mixkit.co/sfx/preview/mixkit-arcade-mechanical-bling-210.mp3',
+                    'https://assets.mixkit.co/sfx/preview/mixkit-arcade-bonus-alert-767.mp3',
+                    'https://assets.mixkit.co/sfx/preview/mixkit-game-show-suspense-waiting-668.mp3',
+                    'https://assets.mixkit.co/sfx/preview/mixkit-arcade-video-game-bonus-2044.mp3',
+                    'https://assets.mixkit.co/sfx/preview/mixkit-arcade-game-complete-or-approved-mission-205.mp3',
+                    'https://assets.mixkit.co/sfx/preview/mixkit-arcade-game-explosion-1699.mp3',
+                    'https://assets.mixkit.co/sfx/preview/mixkit-plastic-arcade-button-press-283.mp3',
+                    'https://assets.mixkit.co/sfx/preview/mixkit-arcade-space-shooter-dead-notification-272.mp3',
+                    'https://assets.mixkit.co/sfx/preview/mixkit-arcade-game-tile-hit-207.mp3',
+                    'https://assets.mixkit.co/sfx/preview/mixkit-arcade-game-complete-205.mp3',
+                    'https://assets.mixkit.co/sfx/preview/mixkit-unlock-game-notification-253.mp3'
+                ],
+                // Банк 2: ударные и эффекты
+                [
+                    'https://assets.mixkit.co/sfx/preview/mixkit-drum-bass-hit-2294.mp3',
+                    'https://assets.mixkit.co/sfx/preview/mixkit-snare-drum-808-2295.mp3',
+                    'https://assets.mixkit.co/sfx/preview/mixkit-tiny-voice-cheer-1550.mp3',
+                    'https://assets.mixkit.co/sfx/preview/mixkit-hand-clap-1925.mp3',
+                    'https://assets.mixkit.co/sfx/preview/mixkit-quick-jump-arcade-game-239.mp3',
+                    'https://assets.mixkit.co/sfx/preview/mixkit-plastic-arcade-button-press-283.mp3',
+                    'https://assets.mixkit.co/sfx/preview/mixkit-arcade-game-explosion-1699.mp3',
+                    'https://assets.mixkit.co/sfx/preview/mixkit-arcade-retro-changing-tab-206.mp3',
+                    'https://assets.mixkit.co/sfx/preview/mixkit-arcade-game-jump-coin-216.mp3',
+                    'https://assets.mixkit.co/sfx/preview/mixkit-arcade-bonus-alert-767.mp3',
+                    'https://assets.mixkit.co/sfx/preview/mixkit-arcade-mechanical-bling-210.mp3',
+                    'https://assets.mixkit.co/sfx/preview/mixkit-game-click-1114.mp3',
+                    'https://assets.mixkit.co/sfx/preview/mixkit-arcade-game-tile-hit-207.mp3',
+                    'https://assets.mixkit.co/sfx/preview/mixkit-unlock-game-notification-253.mp3',
+                    'https://assets.mixkit.co/sfx/preview/mixkit-arcade-video-game-bonus-2044.mp3',
+                    'https://assets.mixkit.co/sfx/preview/mixkit-arcade-game-complete-or-approved-mission-205.mp3'
+                ]
+            ];
+            
+            // Создаем 16 кнопок
+            for (let i = 0; i < 16; i++) {
+                const button = document.createElement('button');
+                button.className = 'button';
+                button.textContent = i + 1;
+                button.dataset.index = i;
+                
+                button.addEventListener('mousedown', function() {
+                    playSound(i);
+                    this.classList.add('active');
+                });
+                
+                button.addEventListener('mouseup', function() {
+                    this.classList.remove('active');
+                });
+                
+                button.addEventListener('mouseleave', function() {
+                    this.classList.remove('active');
+                });
+                
+                // Для сенсорных устройств
+                button.addEventListener('touchstart', function(e) {
+                    e.preventDefault();
+                    playSound(i);
+                    this.classList.add('active');
+                });
+                
+                button.addEventListener('touchend', function(e) {
+                    e.preventDefault();
+                    this.classList.remove('active');
+                });
+                
+                container.appendChild(button);
+            }
+            
+            // Функция воспроизведения звука
+            async function playSound(index) {
+                try {
+                    const response = await fetch(soundBanks[currentSoundBank][index]);
+                    const arrayBuffer = await response.arrayBuffer();
+                    const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
+                    
+                    const source = audioContext.createBufferSource();
+                    source.buffer = audioBuffer;
+                    
+                    // Подключаем к мастер-цепочке
+                    source.connect(masterGain);
+                    
+                    // Обновляем параметры
+                    masterGain.gain.value = masterVolume;
+                    masterPanner.pan.value = masterPan;
+                    
+                    source.start();
+                    
+                    // Очищаем ресурсы после завершения
+                    source.onended = function() {
+                        source.disconnect();
+                    };
+                } catch (error) {
+                    console.error("Ошибка воспроизведения:", error);
+                }
+            }
+            
+            // Общая громкость
+            document.getElementById('master-volume').addEventListener('input', function() {
+                masterVolume = parseFloat(this.value);
+                document.getElementById('volume-value').textContent = 
+                    Math.round(masterVolume * 100) + '%';
+                masterGain.gain.value = masterVolume;
+            });
+            
+            // Общая панорама
+            document.getElementById('master-pan').addEventListener('input', function() {
+                masterPan = parseFloat(this.value);
+                updatePanDisplay();
+                masterPanner.pan.value = masterPan;
+            });
+            
+            // Обновление отображения панорамы
+            function updatePanDisplay() {
+                let panText;
+                if (masterPan === 0) panText = 'Центр';
+                else if (masterPan < 0) panText = `Влево ${Math.abs(masterPan)*100}%`;
+                else panText = `Вправо ${masterPan*100}%`;
+                
+                document.getElementById('pan-value').textContent = panText;
+            }
+            
+            // Смена звуков
+            document.getElementById('change-sound').addEventListener('click', function() {
+                currentSoundBank = (currentSoundBank + 1) % soundBanks.length;
+                alert(`Режим звуков: ${currentSoundBank === 0 ? 'Синтезатор' : 'Ударные/Эффекты'}`);
+            });
+            
+            // Остановка всех звуков
+            document.getElementById('stop-all').addEventListener('click', function() {
+                if (audioContext.state !== 'closed') {
+                    audioContext.suspend().then(() => {
+                        audioContext.resume();
+                    });
+                }
+            });
+            
+            // Сброс панорамы
+            document.getElementById('reset-pan').addEventListener('click', function() {
+                document.getElementById('master-pan').value = 0;
+                masterPan = 0;
+                masterPanner.pan.value = 0;
+                updatePanDisplay();
+            });
+            
+            // Инициализация отображения
+            updatePanDisplay();
+        });
+    </script>
+</body>
+</html>
